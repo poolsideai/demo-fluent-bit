@@ -9,7 +9,7 @@ env:
   API_URL:  ${{ vars.API_URL || 'https://api.poolsi.de' }}
   AGENT_NAME: ${{ vars.AGENT_NAME || 'vanilla_agent_1003' }}
   POOL_VERSION: ${{ vars.POOL_VERSION || 'v0.2.98' }}
-  BASE_BRANCH: main
+  BASE_BRANCH: master
 
 jobs:
   poolside-agent:
