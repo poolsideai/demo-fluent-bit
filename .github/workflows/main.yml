@@ -56,18 +56,9 @@ jobs:
           BRANCH_NAME="docs"
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
           git checkout -b "$BRANCH_NAME"
+          git push origin $BRANCH_NAME
           echo "Working with base branch: ${{ env.BASE_BRANCH }} and feature branch: $BRANCH_NAME"
 
-      - name: Get issue details
-        id: issue
-        run: |
-          ISSUE_BODY=$(cat <<'EOF'
-          ${{ github.event.issue.body }}
-          EOF
-          )
-          echo "issue_body<<EOF" >> $GITHUB_OUTPUT
-          echo "$ISSUE_BODY" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Implement changes with Pool Agent
         env:
@@ -77,8 +68,7 @@ jobs:
 
           pool --api-url "${{ env.API_URL }}" \
             --agent-name "${{ env.AGENT_NAME }}" \
-            --prompt "Implement the changes requested in the following issue. After implementing the changes, create a file named 'pr-summary.md' in the repository root that contains a concise pull request summary with: 1) A brief overview of what was implemented, 2) Key changes as bullet points, 3) Any relevant notes about the implementation. Keep the summary under 300 words." \
-            --context-file /tmp/issue-description.txt \
+            --prompt "You are an LLM agent tasked with documenting every file in a repository. Your goal is to generate comprehensive documentation for each file, explaining its purpose, functionality, and usage.  For each file in the repository, you should: 1. Analyze the file's content and structure 2. Identify the main components, functions, or classes 3. Explain the purpose and functionality of each component 4. Document any important parameters, return values, or side effects 5. Provide usage examples where applicable 6. Note any dependencies or requirements. Please generate documentation for each file in the following format: - File path: [path/to/file] - File type: [e.g., Python script, configuration file, etc.] - Purpose: [Brief description of what the file does] - Key components: [List of main functions, classes, or sections] - Detailed documentation: [Comprehensive explanation of the file's functionality] - Usage examples: [Code examples showing how to use the file/components] - Dependencies: [List of any external libraries or files this file depends on]  Start documenting the files in the repository. Make sure to write the documentation files in markdown .md files in the repo. for every 2 files created make sure to do a git commit and git push so that we save the progress" \
             --unsafe-auto-allow 
 
 
