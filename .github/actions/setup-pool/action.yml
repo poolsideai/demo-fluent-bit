@@ -1,0 +1,141 @@
+name: 'Setup Pool Binary'
+description: 'Download and setup the pool binary from GitHub releases'
+
+# Usage Example. This will use default pool version, and correct bin for runner arch
+# - name: Setup Pool
+#   uses: ./.github/actions/setup-pool
+branding:
+  icon: 'download'
+  color: 'blue'
+
+
+inputs:
+  tag:
+    description: 'The release tag to download (e.g., v0.1.0)'
+    required: false
+    default: 'v0.2.53'
+  os:
+    description: 'Operating system (linux, darwin, windows)'
+    required: false
+    default: ${{ runner.os == 'Linux' && 'linux' || runner.os == 'macOS' && 'darwin' || runner.os == 'Windows' && 'windows' }}
+  arch:
+    description: 'Architecture (amd64, arm64)'
+    required: false
+    default: ${{ runner.arch == 'X64' && 'amd64' || runner.arch == 'ARM64' && 'arm64' }}
+  github-token:
+    description: 'GitHub token for downloading releases'
+    required: false
+    default: ${{ github.token }}
+  repo:
+    description: 'Repository containing pool releases (owner/repo)'
+    required: false
+    default: 'poolsideai/forge'
+
+outputs:
+  poolbin:
+    description: 'Path to the pool binary'
+    value: ${{ steps.setup.outputs.poolbin }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Normalize inputs
+      id: normalize
+      shell: bash
+      run: |
+        # Normalize OS names
+        OS="${{ inputs.os }}"
+        OS_LOWER=$(echo "$OS" | tr '[:upper:]' '[:lower:]')
+
+        # Map runner.os values to our binary naming
+        case "$OS_LOWER" in
+          linux) OS_NORMALIZED="linux" ;;
+          macos|darwin) OS_NORMALIZED="darwin" ;;
+          windows) OS_NORMALIZED="windows" ;;
+          *) OS_NORMALIZED="$OS_LOWER" ;;
+        esac
+
+        # Normalize architecture
+        ARCH="${{ inputs.arch }}"
+        ARCH_LOWER=$(echo "$ARCH" | tr '[:upper:]' '[:lower:]')
+
+        # Map runner.arch values to our binary naming
+        case "$ARCH_LOWER" in
+          x64|x86_64|amd64) ARCH_NORMALIZED="amd64" ;;
+          arm64|aarch64) ARCH_NORMALIZED="arm64" ;;
+          *) ARCH_NORMALIZED="$ARCH_LOWER" ;;
+        esac
+
+        echo "os=$OS_NORMALIZED" >> $GITHUB_OUTPUT
+        echo "arch=$ARCH_NORMALIZED" >> $GITHUB_OUTPUT
+
+        # Determine binary suffix
+        if [[ "$OS_NORMALIZED" == "windows" ]]; then
+          echo "suffix=.exe" >> $GITHUB_OUTPUT
+        else
+          echo "suffix=" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Download pool binary
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -x
+        # Construct the archive name
+        ARCHIVE_NAME="pool-${{ steps.normalize.outputs.os }}-${{ steps.normalize.outputs.arch }}"
+
+        # Ensure the tag has the pool/ prefix
+        TAG="${{ inputs.tag }}"
+        if [[ ! "$TAG" =~ ^pool/ ]]; then
+          TAG="pool/$TAG"
+        fi
+
+        echo "Downloading $ARCHIVE_NAME from release $TAG"
+
+        # Create a temporary directory
+        TEMP_DIR=$(mktemp -d)
+        cd "$TEMP_DIR"
+
+        # Download the archive. Use * at the end of the pattern to download .exe and .tar.gz
+        gh release download "$TAG" \
+          --repo "${{ inputs.repo }}" \
+          --pattern "$ARCHIVE_NAME*" \
+          || (echo "Failed to download $ARCHIVE_NAME from release $TAG from repo ${{ inputs.repo }}" && exit 1)
+
+        # Depending on the release, the binaries might be tarred.
+        shopt -s nullglob
+        for f in *.tar.gz; do
+          tar -xvf "$f"
+        done
+        shopt -u nullglob
+
+        # Find the binary (it should be named pool-$os-$arch or pool-$os-$arch.exe)
+        BINARY_NAME="pool-${{ steps.normalize.outputs.os }}-${{ steps.normalize.outputs.arch }}${{ steps.normalize.outputs.suffix }}"
+
+        # Make it executable (no-op on Windows)
+        chmod +x "$BINARY_NAME"
+
+        # Move to a standard location with simplified name
+        mkdir -p "$GITHUB_WORKSPACE/.pool/bin"
+        mv "$BINARY_NAME" "$GITHUB_WORKSPACE/.pool/bin/pool${{ steps.normalize.outputs.suffix }}"
+
+        # Clean up
+        cd "$GITHUB_WORKSPACE"
+        rm -rf "$TEMP_DIR"
+
+    - name: Setup PATH
+      id: setup
+      shell: bash
+      run: |
+        # Add pool to PATH
+        echo "$GITHUB_WORKSPACE/.pool/bin" >> $GITHUB_PATH
+
+        # Set POOLSIDE_API_URL environment variable
+        echo "POOLSIDE_API_URL=https://api.poolsi.de" >> $GITHUB_ENV
+
+        # Output the path for other steps
+        echo "poolbin=$GITHUB_WORKSPACE/.pool/bin/pool${{ steps.normalize.outputs.suffix }}" >> $GITHUB_OUTPUT
+
+        # Verify installation
+        "$GITHUB_WORKSPACE/.pool/bin/pool${{ steps.normalize.outputs.suffix }}" --version || echo "Note: pool binary might not have a --version flag"
