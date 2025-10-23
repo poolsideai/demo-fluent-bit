@@ -1,73 +1,235 @@
-name: Check Documentation Coverage
+name: Auto-Document Files with pool
 
 on:
   workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Number of files to document per run'
+        required: false
+        default: '10'
+env:
+  API_URL:  ${{ vars.API_URL || 'https://oasis.poolsi.de' }}
+  AGENT_NAME: ${{ vars.AGENT_NAME || 'malibu-v2.2' }}
+  POOL_VERSION: ${{ vars.POOL_VERSION || 'v0.2.98' }}
 
 jobs:
-  check-docs:
+  auto-document:
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Pool
+        id: setup-pool
+        uses: ./.github/actions/setup-pool
+        with:
+          tag: ${{ env.POOL_VERSION }}
+          github-token: ${{ secrets.FORGE_POOL_TOKEN }}
       
       - name: Find undocumented files
-        id: check
+        id: find-files
         run: |
-          echo "## Documentation Coverage Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          # Find up to N undocumented files
+          BATCH_SIZE=${{ github.event.inputs.batch_size || 10 }}
           
-          # Find all files in src directory
           undocumented=()
-          total_files=0
+          count=0
           
           while IFS= read -r -d '' src_file; do
-            # Skip if it's a directory
             if [ -d "$src_file" ]; then
               continue
             fi
             
-            total_files=$((total_files + 1))
-            
-            # Generate expected doc path
             relative_path="${src_file#src/}"
             doc_file="doc/${relative_path}.md"
             
-            # Check if documentation exists
             if [ ! -f "$doc_file" ]; then
               undocumented+=("$src_file")
+              count=$((count + 1))
+              
+              if [ $count -ge $BATCH_SIZE ]; then
+                break
+              fi
             fi
-          done < <(find src -type f -print0 2>/dev/null || true)
+          done < <(find src -type f -print0 2>/dev/null | sort -z)
           
-          # Calculate statistics
-          undocumented_count=${#undocumented[@]}
-          documented_count=$((total_files - undocumented_count))
+          # Save to file for next step
+          printf "%s\n" "${undocumented[@]}" > files_to_document.txt
           
-          if [ $total_files -gt 0 ]; then
-            coverage=$((documented_count * 100 / total_files))
+          echo "found_count=${#undocumented[@]}" >> $GITHUB_OUTPUT
+          
+          if [ ${#undocumented[@]} -eq 0 ]; then
+            echo "✅ All files are documented!"
+            echo "has_files=false" >> $GITHUB_OUTPUT
           else
-            coverage=0
+            echo "📝 Found ${#undocumented[@]} files to document"
+            echo "has_files=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Generate documentation with pool
+        if: steps.find-files.outputs.has_files == 'true'
+        run: |
+          # Read list of files to document
+          mapfile -t files_to_document < files_to_document.txt
+          
+          echo "Documenting ${#files_to_document[@]} files..."
+          
+          for src_file in "${files_to_document[@]}"; do
+            if [ -z "$src_file" ]; then
+              continue
+            fi
+            
+            echo "Documenting: $src_file"
+            
+            # Read source file
+            if [ ! -f "$src_file" ]; then
+              echo "❌ File not found: $src_file"
+              continue
+            fi
+            
+            # Get file extension for context
+            file_ext="${src_file##*.}"
+            
+            # Read the source code
+            source_code=$(cat "$src_file")
+            
+            # Create prompt for Claude
+            prompt="Please create comprehensive documentation for this source file.
+
+          File: $src_file
+          Language/Type: .$file_ext
+
+          Source Code:
+          \`\`\`
+          $source_code
+          \`\`\`
+
+          Create documentation that includes:
+          1. A brief overview of what this file does
+          2. Key functions/classes/components and their purposes
+          3. Important variables or constants
+          4. Dependencies and relationships with other parts of the system
+          5. Any notable implementation details or algorithms
+          6. Usage examples if applicable
+
+          Format the documentation in clear, professional Markdown suitable for a technical documentation site."
+            
+            # Generate documentation using pool CLI
+            documentation=$(echo "$prompt" | pool --api-url "${{ env.API_URL }}" \
+            --agent-name "${{ env.AGENT_NAME }}" \
+            --prompt "Implement the changes requested in the following issue. After implementing the changes, create a file named 'pr-summary.md' in the repository root that contains a concise pull request summary with: 1) A brief overview of what was implemented, 2) Key changes as bullet points, 3) Any relevant notes about the implementation. Keep the summary under 300 words." \
+            --context-file /tmp/issue-description.txt \
+            --unsafe-auto-allow  2>/dev/null)
+            
+            if [ $? -ne 0 ] || [ -z "$documentation" ]; then
+              echo "❌ Error generating documentation for $src_file"
+              continue
+            fi
+            
+            # Create doc file path
+            relative_path="${src_file#src/}"
+            doc_file="doc/${relative_path}.md"
+            
+            # Create directory if needed
+            doc_dir=$(dirname "$doc_file")
+            mkdir -p "$doc_dir"
+            
+            # Write documentation
+            echo "$documentation" > "$doc_file"
+            
+            echo "✅ Created: $doc_file"
+          done
+          
+          echo ""
+          echo "✅ Documentation generation complete!"
+      
+      - name: Commit and push changes
+        if: steps.find-files.outputs.has_files == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          git add doc/
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
           fi
           
-          # Output summary
-          echo "📊 **Statistics:**" >> $GITHUB_STEP_SUMMARY
-          echo "- Total files in \`src/\`: $total_files" >> $GITHUB_STEP_SUMMARY
-          echo "- Documented: $documented_count" >> $GITHUB_STEP_SUMMARY
-          echo "- Undocumented: $undocumented_count" >> $GITHUB_STEP_SUMMARY
-          echo "- Coverage: ${coverage}%" >> $GITHUB_STEP_SUMMARY
+          FILES_COUNT=${{ steps.find-files.outputs.found_count }}
+          git commit -m "docs: auto-generate documentation for ${FILES_COUNT} files
+
+Generated by Claude via GitHub Actions"
+          
+          git push
+      
+      - name: Check if more files need documentation
+        id: check-remaining
+        if: steps.find-files.outputs.has_files == 'true'
+        run: |
+          # Count remaining undocumented files
+          remaining=0
+          
+          while IFS= read -r -d '' src_file; do
+            if [ -d "$src_file" ]; then
+              continue
+            fi
+            
+            relative_path="${src_file#src/}"
+            doc_file="doc/${relative_path}.md"
+            
+            if [ ! -f "$doc_file" ]; then
+              remaining=$((remaining + 1))
+            fi
+          done < <(find src -type f -print0 2>/dev/null)
+          
+          echo "remaining_count=$remaining" >> $GITHUB_OUTPUT
+          
+          if [ $remaining -gt 0 ]; then
+            echo "📋 $remaining files still need documentation"
+            echo "has_remaining=true" >> $GITHUB_OUTPUT
+          else
+            echo "🎉 All files are now documented!"
+            echo "has_remaining=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Trigger next batch
+        if: steps.check-remaining.outputs.has_remaining == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const remaining = ${{ steps.check-remaining.outputs.remaining_count }};
+            console.log(`Triggering next batch for ${remaining} remaining files...`);
+            
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'auto-document.yml',
+              ref: context.ref,
+              inputs: {
+                batch_size: '${{ github.event.inputs.batch_size || 10 }}'
+              }
+            });
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Documentation Generation Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          # List undocumented files
-          if [ $undocumented_count -gt 0 ]; then
-            echo "❌ **Undocumented Files:**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            for file in "${undocumented[@]}"; do
-              echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
-            done
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "::warning::Found $undocumented_count undocumented file(s)"
-            exit 1
+          if [ "${{ steps.find-files.outputs.has_files }}" == "true" ]; then
+            echo "✅ Documented ${{ steps.find-files.outputs.found_count }} files in this run" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "${{ steps.check-remaining.outputs.has_remaining }}" == "true" ]; then
+              echo "📋 ${{ steps.check-remaining.outputs.remaining_count }} files still need documentation" >> $GITHUB_STEP_SUMMARY
+              echo "🔄 Next batch will be triggered automatically" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "🎉 All files are now documented!" >> $GITHUB_STEP_SUMMARY
+            fi
           else
-            echo "✅ **All files are documented!**" >> $GITHUB_STEP_SUMMARY
-            echo "::notice::All source files have documentation"
+            echo "✅ All files are already documented!" >> $GITHUB_STEP_SUMMARY
           fi
