@@ -208,7 +208,7 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              workflow_id: 'documentor.yml',
+              workflow_id: 'lib-summarizer.yml',
               ref: context.ref,
               inputs: {
                 batch_size: '${{ github.event.inputs.batch_size || 10 }}'
