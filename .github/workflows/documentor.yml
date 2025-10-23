@@ -41,8 +41,8 @@ jobs:
           # Create or checkout base branch from tag
           if git ls-remote --exit-code --heads origin ${{ env.BASE_BRANCH }}; then
             echo "Base branch ${{ env.BASE_BRANCH }} already exists, checking it out"
+            git fetch origin
             git checkout ${{ env.BASE_BRANCH }}
-            git pull origin ${{ env.BASE_BRANCH }}
           else
             echo "Creating new base branch ${{ env.BASE_BRANCH }} from tag"
             git checkout -b ${{ env.BASE_BRANCH }}
