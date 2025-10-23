@@ -59,6 +59,7 @@ jobs:
         run: |
           # Find up to N undocumented directories
           BATCH_SIZE=${{ github.event.inputs.batch_size || 10 }}
+          DIRECTORY=${{ github.event.inputs.directory || 'lib' }}
           
           undocumented=()
           count=0
