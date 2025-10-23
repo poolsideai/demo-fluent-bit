@@ -31,9 +31,6 @@ jobs:
       
       - name: Find undocumented files
         id: find-files
-        env:
-          GH_TOKEN: ${{ github.token }}
-          POOLSIDE_TOKEN: ${{ secrets.POOLSIDE_API_KEY }}
         run: |
           # Find up to N undocumented files
           BATCH_SIZE=${{ github.event.inputs.batch_size || 10 }}
@@ -74,6 +71,9 @@ jobs:
       
       - name: Generate documentation with pool
         if: steps.find-files.outputs.has_files == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POOLSIDE_TOKEN: ${{ secrets.POOLSIDE_API_KEY }}
         run: |
           # Read list of files to document
           mapfile -t files_to_document < files_to_document.txt
