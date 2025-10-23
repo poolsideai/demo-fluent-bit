@@ -40,9 +40,9 @@ write_documentation() {
 
 # Main execution
 main() {
-    # Check if ANTHROPIC_API_KEY is set
-    if [[ -z "$ANTHROPIC_API_KEY" ]]; then
-        echo "Error: ANTHROPIC_API_KEY environment variable not set" >&2
+    # Check if POOLSIDE_TOKEN is set
+    if [[ -z "$POOLSIDE_TOKEN" ]]; then
+        echo "Error: POOLSIDE_TOKEN environment variable not set" >&2
         exit 1
     fi
     
