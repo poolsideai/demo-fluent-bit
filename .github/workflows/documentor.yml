@@ -77,37 +77,27 @@ jobs:
           
           echo "Documenting ${#files_to_document[@]} files..."
           
+          # Create a description of the task with file paths
+          cat > /tmp/documentation-task.txt << 'EOF'
+          Please create comprehensive documentation for the following source files.
+
+          For each file, create a corresponding documentation file in the doc/ directory with the same relative path structure and add a .md extension.
+
+          Files to document:
+          EOF
+          
+          # Add the list of files
           for src_file in "${files_to_document[@]}"; do
             if [ -z "$src_file" ]; then
               continue
             fi
-            
-            echo "Documenting: $src_file"
-            
-            # Read source file
-            if [ ! -f "$src_file" ]; then
-              echo "❌ File not found: $src_file"
-              continue
-            fi
-            
-            # Get file extension for context
-            file_ext="${src_file##*.}"
-            
-            # Read the source code
-            source_code=$(cat "$src_file")
-            
-            # Create prompt for Claude
-            prompt="Please create comprehensive documentation for this source file.
+            echo "- $src_file" >> /tmp/documentation-task.txt
+          done
+          
+          # Add documentation requirements
+          cat >> /tmp/documentation-task.txt << 'EOF'
 
-          File: $src_file
-          Language/Type: .$file_ext
-
-          Source Code:
-          \`\`\`
-          $source_code
-          \`\`\`
-
-          Create documentation that includes:
+          For each file, create documentation that includes:
           1. A brief overview of what this file does
           2. Key functions/classes/components and their purposes
           3. Important variables or constants
@@ -115,33 +105,17 @@ jobs:
           5. Any notable implementation details or algorithms
           6. Usage examples if applicable
 
-          Format the documentation in clear, professional Markdown suitable for a technical documentation site."
-            
-            # Generate documentation using pool CLI
-            documentation=$(echo "$prompt" | pool --api-url "${{ env.API_URL }}" \
+          Format the documentation in clear, professional Markdown suitable for a technical documentation site.
+          
+          Save each documentation file to: doc/{relative_path}.md
+          For example: src/foo/bar.js → doc/foo/bar.js.md
+          EOF
+          
+          # Generate documentation using pool CLI
+          pool --api-url "${{ env.API_URL }}" \
             --agent-name "${{ env.AGENT_NAME }}" \
-            --prompt "Implement the changes requested in the following issue. After implementing the changes, create a file named 'pr-summary.md' in the repository root that contains a concise pull request summary with: 1) A brief overview of what was implemented, 2) Key changes as bullet points, 3) Any relevant notes about the implementation. Keep the summary under 300 words." \
-            --context-file /tmp/issue-description.txt \
-            --unsafe-auto-allow  2>/dev/null)
-            
-            if [ $? -ne 0 ] || [ -z "$documentation" ]; then
-              echo "❌ Error generating documentation for $src_file"
-              continue
-            fi
-            
-            # Create doc file path
-            relative_path="${src_file#src/}"
-            doc_file="doc/${relative_path}.md"
-            
-            # Create directory if needed
-            doc_dir=$(dirname "$doc_file")
-            mkdir -p "$doc_dir"
-            
-            # Write documentation
-            echo "$documentation" > "$doc_file"
-            
-            echo "✅ Created: $doc_file"
-          done
+            --prompt "$(cat /tmp/documentation-task.txt)" \
+            --unsafe-auto-allow
           
           echo ""
           echo "✅ Documentation generation complete!"
