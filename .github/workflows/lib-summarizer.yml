@@ -74,7 +74,7 @@ jobs:
 
             echo $doc_file
             if [ ! -f "$doc_file" ]; then
-              echo "not documented"
+              echo "not documented: $lib_dir"
               undocumented+=("$lib_dir")
               count=$((count + 1))
               
