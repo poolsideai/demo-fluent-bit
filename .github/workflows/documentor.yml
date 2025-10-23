@@ -39,7 +39,7 @@ jobs:
         id: branch
         run: |
           # Create or checkout base branch from tag
-          if git show-ref --verify --quiet refs/remotes/origin/${{ env.BASE_BRANCH }}; then
+          if git ls-remote --exit-code --heads origin ${{ env.BASE_BRANCH }}; then
             echo "Base branch ${{ env.BASE_BRANCH }} already exists, checking it out"
             git checkout ${{ env.BASE_BRANCH }}
             git pull origin ${{ env.BASE_BRANCH }}
