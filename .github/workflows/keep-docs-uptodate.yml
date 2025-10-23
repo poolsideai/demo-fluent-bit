@@ -1,0 +1,78 @@
+name: Keep Docs up to date with pool
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'src/**'
+
+env:
+  API_URL:  ${{ vars.API_URL || 'https://oasis.poolsi.de' }}
+  AGENT_NAME: ${{ vars.AGENT_NAME || 'malibu-v2.2' }}
+  POOL_VERSION: ${{ vars.POOL_VERSION || 'v0.2.98' }}
+  BASE_BRANCH: docs
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Pool
+        id: setup-pool
+        uses: ./.github/actions/setup-pool
+        with:
+          tag: ${{ env.POOL_VERSION }}
+          github-token: ${{ secrets.FORGE_POOL_TOKEN }}
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install Claude CLI
+        run: |
+          npm install -g @anthropic-ai/claude-code
+      
+      - name: Get changed files
+        id: changed-files
+        run: |
+          # Get the list of changed files in src/
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD -- 'src/**' | tr '\n' ' ')
+          echo "files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "Changed files: $CHANGED_FILES"
+      
+      - name: Generate documentation updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POOLSIDE_TOKEN: ${{ secrets.POOLSIDE_API_KEY }}
+          CHANGED_FILES: ${{ steps.changed-files.outputs.files }}
+        run: |
+          bash .github/resources/update_docs.sh
+      
+      - name: Commit and push documentation changes
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # Check if there are any changes to commit
+          if [[ -n $(git status --porcelain docs/) ]]; then
+            git add docs/
+            git commit -m "docs: Auto-update documentation for modified files"
+            git push
+            echo "Documentation updated successfully!"
+          else
+            echo "No documentation changes needed."
+          fi
