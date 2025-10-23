@@ -95,7 +95,7 @@ jobs:
           fi
       
       - name: Generate documentation with pool
-        if: steps.find-files.outputs.has_files == 'true'
+        if: steps.find-libs.outputs.has_files == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           POOLSIDE_TOKEN: ${{ secrets.POOLSIDE_API_KEY }}
