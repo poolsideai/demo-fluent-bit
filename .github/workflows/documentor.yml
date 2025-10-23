@@ -1,0 +1,73 @@
+name: Check Documentation Coverage
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Find undocumented files
+        id: check
+        run: |
+          echo "## Documentation Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Find all files in src directory
+          undocumented=()
+          total_files=0
+          
+          while IFS= read -r -d '' src_file; do
+            # Skip if it's a directory
+            if [ -d "$src_file" ]; then
+              continue
+            fi
+            
+            total_files=$((total_files + 1))
+            
+            # Generate expected doc path
+            relative_path="${src_file#src/}"
+            doc_file="doc/${relative_path}.md"
+            
+            # Check if documentation exists
+            if [ ! -f "$doc_file" ]; then
+              undocumented+=("$src_file")
+            fi
+          done < <(find src -type f -print0 2>/dev/null || true)
+          
+          # Calculate statistics
+          undocumented_count=${#undocumented[@]}
+          documented_count=$((total_files - undocumented_count))
+          
+          if [ $total_files -gt 0 ]; then
+            coverage=$((documented_count * 100 / total_files))
+          else
+            coverage=0
+          fi
+          
+          # Output summary
+          echo "📊 **Statistics:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Total files in \`src/\`: $total_files" >> $GITHUB_STEP_SUMMARY
+          echo "- Documented: $documented_count" >> $GITHUB_STEP_SUMMARY
+          echo "- Undocumented: $undocumented_count" >> $GITHUB_STEP_SUMMARY
+          echo "- Coverage: ${coverage}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # List undocumented files
+          if [ $undocumented_count -gt 0 ]; then
+            echo "❌ **Undocumented Files:**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            for file in "${undocumented[@]}"; do
+              echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
+            done
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "::warning::Found $undocumented_count undocumented file(s)"
+            exit 1
+          else
+            echo "✅ **All files are documented!**" >> $GITHUB_STEP_SUMMARY
+            echo "::notice::All source files have documentation"
+          fi
