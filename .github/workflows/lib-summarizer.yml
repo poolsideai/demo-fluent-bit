@@ -148,7 +148,7 @@ jobs:
           echo "✅ Documentation generation complete!"
       
       - name: Commit and push changes
-        if: steps.find-files.outputs.has_files == 'true'
+        if: steps.find-libs.outputs.has_files == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -167,7 +167,7 @@ jobs:
       
       - name: Check if more files need documentation
         id: check-remaining
-        if: steps.find-files.outputs.has_files == 'true'
+        if: steps.find-libs.outputs.has_files == 'true'
         run: |
           # Count remaining undocumented files
           remaining=0
