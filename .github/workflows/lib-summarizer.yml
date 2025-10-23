@@ -64,14 +64,17 @@ jobs:
           count=0
           
           # Find top-level directories in $DIRECTORY/
+          ls docs/lib/
           while IFS= read -r -d '' lib_dir; do
             # Get just the directory name (e.g., "czpl" from "$DIRECTORY/czpl")
             dir_name=$(basename "$lib_dir")
             
             # Check if corresponding doc file exists
             doc_file="docs/$DIRECTORY/${dir_name}.md"
-            
+
+            echo $doc_file
             if [ ! -f "$doc_file" ]; then
+              echo "not documented"
               undocumented+=("$lib_dir")
               count=$((count + 1))
               
