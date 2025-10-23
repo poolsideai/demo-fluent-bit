@@ -63,50 +63,49 @@ main() {
     echo "Processing ${#changed_files_array[@]} changed file(s)..."
 
     # Create a description of the task with file paths
-      cat > /tmp/documentation-task.txt << 'EOF'
-      Please create comprehensive documentation for the following source files.
+    cat > /tmp/documentation-task.txt << 'EOF'
+Please create comprehensive documentation for the following source files.
+
+For each file, create a corresponding documentation file in the docs/ directory with the same relative path structure and add a .md extension.
+
+Files to document:
+
+EOF
     
-      For each file, create a corresponding documentation file in the docs/ directory with the same relative path structure and add a .md extension.
-    
-      Files to document:
-      
-      EOF
-      
-      # Add the list of files
-      for src_file in "${changed_files_array[@]}"; do
+    # Add the list of files
+    for src_file in "${changed_files_array[@]}"; do
         if [ -z "$src_file" ]; then
-          continue
+            continue
         fi
         echo "- $src_file" >> /tmp/documentation-task.txt
-      done
-      
-      # Add documentation requirements
-      cat >> /tmp/documentation-task.txt << 'EOF'
+    done
     
-      For each file, create documentation that includes:
-      1. A brief overview of what this file does
-      2. Key functions/classes/components and their purposes
-      3. Important variables or constants
-      4. Dependencies and relationships with other parts of the system
-      5. Any notable implementation details or algorithms
-      6. Usage examples if applicable
+    # Add documentation requirements
+    cat >> /tmp/documentation-task.txt << 'EOF'
+
+For each file, create documentation that includes:
+1. A brief overview of what this file does
+2. Key functions/classes/components and their purposes
+3. Important variables or constants
+4. Dependencies and relationships with other parts of the system
+5. Any notable implementation details or algorithms
+6. Usage examples if applicable
+
+Format the documentation in clear, professional Markdown suitable for a technical documentation site.
+
+Save each documentation file to: docs/{relative_path}.md
+For example: src/foo/bar.js → docs/foo/bar.js.md
+
+EOF
     
-      Format the documentation in clear, professional Markdown suitable for a technical documentation site.
-      
-      Save each documentation file to: docs/{relative_path}.md
-      For example: src/foo/bar.js → docs/foo/bar.js.md
-      
-      EOF
-      
-      # Generate documentation using pool CLI
-      pool --api-url "${{ env.API_URL }}" \
-        --agent-name "${{ env.AGENT_NAME }}" \
+    # Generate documentation using pool CLI
+    pool --api-url "${API_URL}" \
+        --agent-name "${AGENT_NAME}" \
         --prompt "$(cat /tmp/documentation-task.txt)" \
         --unsafe-auto-allow
-      
-      echo ""
-      echo "✅ Documentation generation complete!"
-
+    
+    echo ""
+    echo "✅ Documentation generation complete!"
 }
 
 # Run main function
