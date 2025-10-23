@@ -1,0 +1,235 @@
+name: Auto-Document Files with pool
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Number of files to libraries per run'
+        required: false
+        default: '3'
+      directory:
+        description: 'Library Directory'
+        required: false
+        default: 'lib'
+env:
+  API_URL:  ${{ vars.API_URL || 'https://oasis.poolsi.de' }}
+  AGENT_NAME: ${{ vars.AGENT_NAME || 'malibu-v2.2' }}
+  POOL_VERSION: ${{ vars.POOL_VERSION || 'v0.2.98' }}
+  BASE_BRANCH: docs
+
+jobs:
+  auto-document:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Pool
+        id: setup-pool
+        uses: ./.github/actions/setup-pool
+        with:
+          tag: ${{ env.POOL_VERSION }}
+          github-token: ${{ secrets.FORGE_POOL_TOKEN }}
+          
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create branches
+        id: branch
+        run: |
+          # Create or checkout base branch from tag
+          if git ls-remote --exit-code --heads origin ${{ env.BASE_BRANCH }}; then
+            echo "Base branch ${{ env.BASE_BRANCH }} already exists, checking it out"
+            git fetch origin
+            git checkout ${{ env.BASE_BRANCH }}
+          else
+            echo "Creating new base branch ${{ env.BASE_BRANCH }} from tag"
+            git checkout -b ${{ env.BASE_BRANCH }}
+            git push origin ${{ env.BASE_BRANCH }}
+          fi
+
+      
+      - name: Find undocumented libraries
+        id: find-libs
+        run: |
+          # Find up to N undocumented directories
+          BATCH_SIZE=${{ github.event.inputs.batch_size || 10 }}
+          
+          undocumented=()
+          count=0
+          
+          # Find top-level directories in $DIRECTORY/
+          while IFS= read -r -d '' lib_dir; do
+            # Get just the directory name (e.g., "czpl" from "$DIRECTORY/czpl")
+            dir_name=$(basename "$lib_dir")
+            
+            # Check if corresponding doc file exists
+            doc_file="docs/$DIRECTORY/${dir_name}.md"
+            
+            if [ ! -f "$doc_file" ]; then
+              undocumented+=("$lib_dir")
+              count=$((count + 1))
+              
+              if [ $count -ge $BATCH_SIZE ]; then
+                break
+              fi
+            fi
+          done < <(find lib -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null | sort -z)
+          
+          # Save to file for next step
+          printf "%s\n" "${undocumented[@]}" > files_to_document.txt
+          
+          echo "found_count=${#undocumented[@]}" >> $GITHUB_OUTPUT
+          
+          if [ ${#undocumented[@]} -eq 0 ]; then
+            echo "✅ All directories are documented!"
+            echo "has_files=false" >> $GITHUB_OUTPUT
+          else
+            echo "📝 Found ${#undocumented[@]} directories to document"
+            echo "has_files=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Generate documentation with pool
+        if: steps.find-files.outputs.has_files == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POOLSIDE_TOKEN: ${{ secrets.POOLSIDE_API_KEY }}
+        run: |
+          # Read list of folders to summarize
+          mapfile -t files_to_document < files_to_document.txt
+          
+          echo "Documenting ${#files_to_document[@]} files..."
+          
+          # Create a description of the task with file paths
+          cat > /tmp/documentation-task.txt << 'EOF'
+          Create a markdown documentation file that summarizes each library in the specified directories.
+
+          For each lib, create a corresponding documentation file in the docs/ directory with the same relative path structure and add a .md extension.
+          
+          Libraries to document:
+          EOF
+          
+          # Add the list of files
+          for src_file in "${files_to_document[@]}"; do
+            if [ -z "$src_file" ]; then
+              continue
+            fi
+            echo "- $src_file" >> /tmp/documentation-task.txt
+          done
+
+          # Add documentation requirements
+          cat >> /tmp/documentation-task.txt << 'EOF'
+          
+          For each library, include:
+          1. A brief overview of what the library does
+          2. Key methods/functions available (with brief descriptions)
+          3. Any important usage notes or examples
+          Structure the documentation with clear headings for each library, and organize the key methods in a logical order. Use bullet points or tables where appropriate for readability.
+          The output should be a single markdown file that serves as a quick reference guide for developers working with these libraries.
+
+          Format the documentation in clear, professional Markdown suitable for a technical documentation site.
+          
+          Save each documentation file to: docs/{relative_path}.md
+          For example: lib/foo/ → docs/lib/foo.md
+          EOF
+          
+          # Generate documentation using pool CLI
+          pool --api-url "${{ env.API_URL }}" \
+            --agent-name "${{ env.AGENT_NAME }}" \
+            --prompt "$(cat /tmp/documentation-task.txt)" \
+            --unsafe-auto-allow
+          
+          echo ""
+          echo "✅ Documentation generation complete!"
+      
+      - name: Commit and push changes
+        if: steps.find-files.outputs.has_files == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          git add docs/
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          FILES_COUNT=${{ steps.find-files.outputs.found_count }}
+          git commit -m "docs: auto-generate documentation for ${FILES_COUNT} files Generated by pool via GitHub Actions"
+          
+          git push
+      
+      - name: Check if more files need documentation
+        id: check-remaining
+        if: steps.find-files.outputs.has_files == 'true'
+        run: |
+          # Count remaining undocumented files
+          remaining=0
+          
+          while IFS= read -r -d '' src_file; do
+            if [ -d "$src_file" ]; then
+              continue
+            fi
+            
+            relative_path="${src_file#src/}"
+            doc_file="docs/${relative_path}.md"
+            
+            if [ ! -f "$doc_file" ]; then
+              remaining=$((remaining + 1))
+            fi
+          done < <(find src -type f -print0 2>/dev/null)
+          
+          echo "remaining_count=$remaining" >> $GITHUB_OUTPUT
+          
+          if [ $remaining -gt 0 ]; then
+            echo "📋 $remaining files still need documentation"
+            echo "has_remaining=true" >> $GITHUB_OUTPUT
+          else
+            echo "🎉 All files are now documented!"
+            echo "has_remaining=false" >> $GITHUB_OUTPUT
+          fi
+          
+      
+      - name: Trigger next batch
+        if: steps.check-remaining.outputs.has_remaining == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const remaining = ${{ steps.check-remaining.outputs.remaining_count }};
+            console.log(`Triggering next batch for ${remaining} remaining files...`);
+            
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'documentor.yml',
+              ref: context.ref,
+              inputs: {
+                batch_size: '${{ github.event.inputs.batch_size || 10 }}'
+              }
+            });
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Documentation Generation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.find-files.outputs.has_files }}" == "true" ]; then
+            echo "✅ Documented ${{ steps.find-files.outputs.found_count }} files in this run" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "${{ steps.check-remaining.outputs.has_remaining }}" == "true" ]; then
+              echo "📋 ${{ steps.check-remaining.outputs.remaining_count }} files still need documentation" >> $GITHUB_STEP_SUMMARY
+              echo "🔄 Next batch will be triggered automatically" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "🎉 All files are now documented!" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "✅ All files are already documented!" >> $GITHUB_STEP_SUMMARY
+          fi
