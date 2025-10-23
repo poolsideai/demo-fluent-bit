@@ -104,6 +104,11 @@ jobs:
           mapfile -t files_to_document < files_to_document.txt
           
           echo "Documenting ${#files_to_document[@]} files..."
+
+          echo "Documenting ${#files_to_document[@]} files..."
+          for file in "${files_to_document[@]}"; do
+            echo "  - $file"
+          done
           
           # Create a description of the task with file paths
           cat > /tmp/documentation-task.txt << 'EOF'
