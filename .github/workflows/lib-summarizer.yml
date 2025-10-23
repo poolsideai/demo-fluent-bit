@@ -85,7 +85,12 @@ jobs:
           printf "%s\n" "${undocumented[@]}" > files_to_document.txt
           
           echo "found_count=${#undocumented[@]}" >> $GITHUB_OUTPUT
-          
+          if [ ${#undocumented[@]} -gt 0 ]; then
+            printf '  - %s\n' "${undocumented[@]}"
+          else
+            echo "  (none)"
+          fi
+
           if [ ${#undocumented[@]} -eq 0 ]; then
             echo "✅ All directories are documented!"
             echo "has_files=false" >> $GITHUB_OUTPUT
@@ -103,8 +108,6 @@ jobs:
           # Read list of folders to summarize
           mapfile -t files_to_document < files_to_document.txt
           
-          echo "Documenting ${#files_to_document[@]} files..."
-
           echo "Documenting ${#files_to_document[@]} files..."
           for file in "${files_to_document[@]}"; do
             echo "  - $file"
