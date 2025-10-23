@@ -60,7 +60,7 @@ jobs:
           POOLSIDE_TOKEN: ${{ secrets.POOLSIDE_API_KEY }}
           CHANGED_FILES: ${{ steps.changed-files.outputs.files }}
         run: |
-          bash .github/resources/update_docs.sh
+          bash .github/workflows/resources/update_docs.sh
       
       - name: Commit and push documentation changes
         run: |
