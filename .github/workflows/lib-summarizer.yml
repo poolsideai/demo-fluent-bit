@@ -1,4 +1,4 @@
-name: Auto-Document Files with pool
+name: Library Summarizer with pool
 
 on:
   workflow_dispatch:
