@@ -31,6 +31,9 @@ jobs:
       
       - name: Find undocumented files
         id: find-files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POOLSIDE_TOKEN: ${{ secrets.POOLSIDE_API_KEY }}
         run: |
           # Find up to N undocumented files
           BATCH_SIZE=${{ github.event.inputs.batch_size || 10 }}
