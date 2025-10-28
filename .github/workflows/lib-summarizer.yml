@@ -66,7 +66,6 @@ jobs:
           count=0
           
           # Find top-level directories in $DIRECTORY/
-          ls docs/lib/
           while IFS= read -r -d '' lib_dir; do
             # Get just the directory name (e.g., "czpl" from "$DIRECTORY/czpl")
             dir_name=$(basename "$lib_dir")
