@@ -18,7 +18,7 @@ The primary purpose of this file is to:
 - `flb_ml_mode_create()` - Creates a multiline context based on a named mode with configurable parameters
 
 ### Mode Definition Creation
-- `flb_ml_parser_create()` - Creates a new multiline mode definition with specified parameters and configuration options
+- `flb_ml_mode_create()` - Creates a new multiline mode definition with specified parameters and configuration options
 
 ## Supported Built-in Modes
 
@@ -128,7 +128,7 @@ struct flb_ml *ml = flb_ml_mode_create(config, "docker", 500, NULL);
 
 ### Creating a Custom Mode Definition
 ```c
-struct flb_ml_mode *parser = flb_ml_parser_create(config,
+struct flb_ml_mode *parser = flb_ml_mode_create(config,
     "custom_mode",
     FLB_ML_ENDSWITH,
     "\n",
@@ -139,16 +139,7 @@ struct flb_ml_mode *parser = flb_ml_parser_create(config,
     NULL,
     parser_ctx,
     NULL);
-    "custom_mode",
-    FLB_ML_ENDSWITH,
-    "\n",
-    FLB_FALSE,
-    1000,
-    "message",
-    "stream",
-    NULL,
-    parser_ctx,
-    NULL);
+```
 ```
 
 ### Creating a Python Mode Context with Custom Key
