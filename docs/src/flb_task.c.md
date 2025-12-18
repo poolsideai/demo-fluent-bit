@@ -12,10 +12,11 @@ The task system is central to Fluent Bit's architecture, serving as the mechanis
 Creates a new task with the provided data buffer, input instance, chunk, tag, and configuration. This function handles routing logic to determine which output plugins should receive the task.
 
 The function:
-1. Allocates a new task structure with a unique ID
+1. Allocates a new task structure with a unique ID from the task map
 2. Creates an event chunk from the provided data
 3. Determines routing paths based on the input instance's configuration
 4. Links the task to the input instance for tracking
+5. Initializes task routes based on routing configuration
 
 ### `flb_task_destroy()`
 Destroys a task and frees all associated resources including routes, retries, and the underlying chunk.
@@ -26,6 +27,7 @@ This function ensures proper cleanup of:
 - Associated input chunks
 - Event chunk data
 - Thread synchronization resources
+- Task map entry
 
 ### `flb_task_retry_*()`
 A family of functions for managing task retries when output plugins fail to process data:
@@ -36,7 +38,7 @@ A family of functions for managing task retries when output plugins fail to proc
 - `flb_task_retry_clean()` - Removes retry contexts for specific output instances
 - `flb_task_retry_count()` - Gets the retry count for a specific output instance
 
-The retry mechanism implements exponential backoff to prevent overwhelming output systems during temporary failures.
+The retry mechanism implements exponential backoff to prevent overwhelming output systems during temporary failures. It also handles chunk storage management during retries.
 
 ### `flb_task_running_count()`
 Returns the number of currently active tasks (tasks with users or retries).
@@ -67,7 +69,7 @@ These functions support synchronous output operations where tasks need to be que
 - `FLB_TASK_ROUTE_DROPPED` - Route has been dropped (data will not be sent)
 
 ### Task Structure Fields
-- `id` - Unique identifier for the task
+- `id` - Unique identifier for the task (from task map)
 - `status` - Current processing status
 - `users` - Number of active users of this task (threads/coroutines)
 - `routes` - List of output plugin routes for this task
@@ -77,6 +79,18 @@ These functions support synchronous output operations where tasks need to be que
 - `ic` - Associated input chunk containing the raw data
 - `ref_id` - External reference ID for tracking purposes
 - `lock` - Mutex for thread-safe access to task data
+- `_head` - Link to input instance's task list
+
+### Task Route Structure Fields
+- `out` - Associated output instance
+- `status` - Current route status
+- `_head` - Link to task's route list
+
+### Task Retry Structure Fields
+- `attempts` - Number of retry attempts
+- `o_ins` - Associated output instance
+- `parent` - Parent task reference
+- `_head` - Link to task's retry list
 
 ## Dependencies
 
@@ -113,6 +127,12 @@ Each task follows this lifecycle:
 
 The task map system provides efficient lookup of tasks by ID, which is crucial for the event-driven architecture where tasks are communicated between engine components. Tasks are assigned unique IDs from a pre-allocated map to ensure fast access.
 
+The task map is implemented as:
+- Pre-allocated array of task references
+- Dynamic growth capability when needed
+- O(1) lookup complexity for task retrieval
+- Automatic ID management to prevent conflicts
+
 ### Concurrency Management
 
 Tasks use mutex locks to ensure thread-safe access to shared data structures. The `users` counter tracks how many threads or coroutines are actively working with the task, preventing premature destruction.
@@ -124,6 +144,25 @@ The task system carefully manages memory to prevent leaks:
 - Associated chunks are properly cleaned up
 - Retry contexts are removed when no longer needed
 - Event chunks are destroyed when tasks are completed
+- Proper handling of chunk storage during retries
+
+### Retry Mechanism
+
+The retry mechanism handles failed output operations with the following features:
+- Exponential backoff scheduling to prevent overwhelming output systems
+- Attempt counting with configurable limits
+- Chunk storage management (up/down operations)
+- Automatic cleanup of exhausted retry contexts
+- Integration with the scheduler for delayed execution
+
+### Routing System
+
+Tasks implement a sophisticated routing system that:
+- Supports both direct connections and configuration-based routing
+- Uses bitmask operations for efficient route determination
+- Handles different event types appropriately
+- Manages route status tracking
+- Supports route dropping for failed destinations
 
 ## Usage Examples
 
@@ -161,6 +200,7 @@ The task system implements robust error handling:
 - Memory allocation failures are gracefully handled
 - Retry mechanisms handle temporary output failures
 - Deadlock prevention through proper lock ordering
+- Proper cleanup of partially created tasks
 
 ## Performance Considerations
 
@@ -169,6 +209,7 @@ The task system is designed for high performance:
 - Minimal memory overhead per task
 - Efficient routing determination using bitmask operations
 - Thread-safe operations with fine-grained locking
+- Optimized retry scheduling with exponential backoff
 
 ## Configuration Impact
 
@@ -177,6 +218,7 @@ Task behavior is influenced by several configuration settings:
 - Input plugin buffer settings
 - Routing rules defined in configuration
 - Memory limits that affect task queuing
+- Chunk storage settings that impact retry behavior
 
 ## Debugging and Monitoring
 
@@ -185,3 +227,4 @@ The task system provides several debugging aids:
 - Detailed logging of task creation and destruction
 - Retry attempt tracking
 - Route status monitoring
+- Task map utilization statistics

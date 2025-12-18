@@ -34,6 +34,10 @@ Notifies the supervisor that the child process has started shutdown.
 - `FLB_SUPERVISOR_CHILD_TITLE`: Title used for the child process
 - `FLB_SUPERVISOR_NOTICE_VERSION`: Version number for supervisor notice protocol
 
+### Notice Protocol Commands
+- `FLB_SUPERVISOR_NOTICE_COMMAND_UPDATE_GRACE`: Command to update grace period settings
+- `FLB_SUPERVISOR_NOTICE_COMMAND_SHUTTING_DOWN`: Command to signal shutdown in progress
+
 ### Variables
 - `sv_restart_requested`: Flag indicating if a restart has been requested
 - `sv_stop_signal`: Signal that caused the stop request
@@ -46,6 +50,15 @@ Notifies the supervisor that the child process has started shutdown.
 - `sv_child_grace`: Grace period for child service
 - `sv_child_grace_input`: Grace period for child inputs
 - `sv_child_notify_fd`: File descriptor for child to send notices
+
+## Data Structures
+
+### `flb_supervisor_notice`
+Structure used for communication between parent and child processes:
+- `version`: Protocol version number
+- `command`: Command identifier (UPDATE_GRACE or SHUTTING_DOWN)
+- `grace`: Grace period for service components
+- `grace_input`: Grace period for input components
 
 ## Dependencies
 

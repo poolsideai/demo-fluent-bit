@@ -34,7 +34,7 @@ Creates a thread context within the thread pool. This function prepares a thread
 The creation process:
 1. Allocates memory for the thread context
 2. Stores the function pointer and argument for later execution
-3. Assigns a unique ID to the thread
+3. Assigns a unique ID to the thread based on list position
 4. Links the thread context to the parent thread pool
 5. Sets initial status to `FLB_THREAD_POOL_NONE`
 
@@ -43,8 +43,8 @@ Returns the next available thread using round-robin scheduling. This function he
 
 The round-robin algorithm:
 1. Maintains a pointer to the last accessed thread
-2. Returns the next thread in the sequence
-3. Wraps around to the beginning when reaching the end
+2. Returns the next thread in the sequence using `mk_list_entry_next`
+3. Wraps around to the beginning when reaching the end of the list
 4. Ensures even distribution of work across threads
 
 ### `flb_tp_thread_start(struct flb_tp *tp, struct flb_tp_thread *th)`
@@ -52,7 +52,7 @@ Starts a specific thread by creating a worker thread using the Fluent Bit worker
 
 Thread startup involves:
 1. Creating the actual OS thread using `flb_worker_create()`
-2. Looking up the worker context for management
+2. Looking up the worker context using `flb_worker_lookup()`
 3. Updating the thread status to `FLB_THREAD_POOL_RUNNING`
 4. Storing the thread ID for future reference
 
@@ -69,17 +69,17 @@ Bulk startup is useful for initializing all threads at once, particularly during
 ### `flb_tp_thread_stop(struct flb_tp *tp, struct flb_tp_thread *th)`
 Stops a specific thread in the thread pool.
 
-Note: Current implementation is a placeholder and requires enhancement for proper thread stopping.
+Note: Current implementation is a placeholder and requires enhancement for proper thread stopping. The function currently returns 0 without performing any actual stopping operations.
 
 ### `flb_tp_thread_stop_all(struct flb_tp *tp)`
 Stops all threads in the thread pool.
 
-This function iterates through all threads and attempts to stop each one, though the individual stop implementation is currently minimal.
+This function iterates through all threads and attempts to stop each one using `flb_tp_thread_stop()`, though the individual stop implementation is currently minimal.
 
 ### `flb_tp_thread_destroy()`
 Destroys a thread context (currently a placeholder implementation).
 
-This function would typically handle cleanup of thread-specific resources.
+This function would typically handle cleanup of thread-specific resources. The current implementation simply returns 0 without performing any operations.
 
 ## Important Variables and Constants
 
@@ -132,8 +132,8 @@ The system uses a deferred execution model:
 ### Round-Robin Scheduler
 
 The round-robin algorithm ensures even distribution of work:
-1. Maintains a pointer to the last accessed thread
-2. Returns the next thread in sequence for each request
+1. Maintains a pointer to the last accessed thread (`thread_cur`)
+2. Returns the next thread in sequence using `mk_list_entry_next`
 3. Wraps around to the beginning when reaching the end of the list
 4. Prevents any single thread from becoming a bottleneck
 
@@ -143,6 +143,13 @@ The thread pool leverages Fluent Bit's existing worker infrastructure:
 1. Uses `flb_worker_create()` for actual thread creation
 2. Uses `flb_worker_lookup()` to retrieve worker contexts
 3. Integrates with the broader thread management ecosystem
+
+### Thread ID Management
+
+Thread IDs are managed automatically:
+1. Assigned based on position in the thread list using `flb_tp_thread_get_id`
+2. Provides a simple way to identify threads within the pool
+3. Enables indexed access to specific threads
 
 ## Usage Examples
 
@@ -208,6 +215,14 @@ While the thread pool doesn't have extensive configuration options, its behavior
 - The timing of thread startup operations
 - Integration with Fluent Bit's worker thread configuration
 
+## Known Limitations
+
+The current implementation has several limitations:
+- Thread stopping functionality is not fully implemented
+- Thread destruction is a placeholder implementation
+- No support for thread priority or affinity
+- Limited error handling for thread operations
+
 ## Future Enhancements
 
 Potential improvements to the thread pool system:
@@ -215,3 +230,5 @@ Potential improvements to the thread pool system:
 - More sophisticated scheduling algorithms
 - Better integration with Fluent Bit's event loop
 - Support for thread priority and affinity
+- Proper implementation of thread destruction
+- Enhanced error handling and recovery mechanisms
