@@ -4,54 +4,79 @@
 
 The `flb_task.c` file implements the task management system for Fluent Bit. Tasks represent units of work that need to be processed by output plugins. Each task encapsulates data, routing information, and state management for efficient processing of log events through the Fluent Bit pipeline.
 
+The task system is central to Fluent Bit's architecture, serving as the mechanism for coordinating data flow between input plugins (which generate data) and output plugins (which consume and forward data). Tasks maintain references to their originating input chunks and track which output plugins have successfully processed the data.
+
 ## Key Functions
 
 ### `flb_task_create()`
 Creates a new task with the provided data buffer, input instance, chunk, tag, and configuration. This function handles routing logic to determine which output plugins should receive the task.
 
+The function:
+1. Allocates a new task structure with a unique ID
+2. Creates an event chunk from the provided data
+3. Determines routing paths based on the input instance's configuration
+4. Links the task to the input instance for tracking
+
 ### `flb_task_destroy()`
 Destroys a task and frees all associated resources including routes, retries, and the underlying chunk.
 
+This function ensures proper cleanup of:
+- Task routes (output plugin connections)
+- Retry contexts for failed operations
+- Associated input chunks
+- Event chunk data
+- Thread synchronization resources
+
 ### `flb_task_retry_*()`
 A family of functions for managing task retries when output plugins fail to process data:
+
 - `flb_task_retry_create()` - Creates a retry context for a failed task
-- `flb_task_retry_reschedule()` - Reschedules a retry attempt
+- `flb_task_retry_reschedule()` - Reschedules a retry attempt with exponential backoff
 - `flb_task_retry_destroy()` - Cleans up a retry context
 - `flb_task_retry_clean()` - Removes retry contexts for specific output instances
 - `flb_task_retry_count()` - Gets the retry count for a specific output instance
 
+The retry mechanism implements exponential backoff to prevent overwhelming output systems during temporary failures.
+
 ### `flb_task_running_count()`
 Returns the number of currently active tasks (tasks with users or retries).
+
+This function is used for monitoring and debugging purposes to track the load on the Fluent Bit engine.
 
 ### `flb_task_running_print()`
 Prints information about currently running tasks for debugging purposes.
 
+Useful for diagnosing stuck tasks or understanding the current workload distribution.
+
 ### `flb_task_queue_*()`
 Functions for managing task queues:
-- `flb_task_queue_create()` - Creates a new task queue
+- `flb_task_queue_create()` - Creates a new task queue for pending operations
 - `flb_task_queue_destroy()` - Destroys a task queue and frees resources
+
+These functions support synchronous output operations where tasks need to be queued until resources are available.
 
 ## Important Variables and Constants
 
 ### Task Status Constants
 - `FLB_TASK_NEW` - Task has been created but not yet processed
 - `FLB_TASK_RUNNING` - Task is currently being processed
-- `FLB_TASK_DONE` - Task has completed successfully
 
 ### Task Route Status Constants
-- `FLB_TASK_ROUTE_ACTIVE` - Route is currently active
-- `FLB_TASK_ROUTE_INACTIVE` - Route is inactive
-- `FLB_TASK_ROUTE_FAILED` - Route processing failed
+- `FLB_TASK_ROUTE_INACTIVE` - Route is currently inactive
+- `FLB_TASK_ROUTE_ACTIVE` - Route is actively processing data
+- `FLB_TASK_ROUTE_DROPPED` - Route has been dropped (data will not be sent)
 
 ### Task Structure Fields
 - `id` - Unique identifier for the task
 - `status` - Current processing status
-- `users` - Number of active users of this task
+- `users` - Number of active users of this task (threads/coroutines)
 - `routes` - List of output plugin routes for this task
 - `retries` - List of retry contexts for failed routes
 - `event_chunk` - The event data chunk being processed
-- `i_ins` - Associated input instance
-- `ic` - Associated input chunk
+- `i_ins` - Associated input instance that generated the data
+- `ic` - Associated input chunk containing the raw data
+- `ref_id` - External reference ID for tracking purposes
+- `lock` - Mutex for thread-safe access to task data
 
 ## Dependencies
 
@@ -63,6 +88,8 @@ This module depends on:
 - Router (`flb_router.h`)
 - Chunk management (`flb_input_chunk.h`)
 - Event chunk handling (`flb_event_chunk`)
+- Monkey Core library for linked lists and data structures
+- POSIX threads for synchronization
 
 ## Implementation Details
 
@@ -73,9 +100,30 @@ The task system works by:
 4. Managing retries for failed output operations
 5. Coordinating between input plugins and output plugins
 
-Tasks maintain references to their originating input chunks and track which output plugins have successfully processed the data. The retry mechanism allows failed output operations to be retried with exponential backoff.
+### Task Lifecycle
 
-The task map system provides efficient lookup of tasks by ID, which is crucial for the event-driven architecture where tasks are communicated between engine components.
+Each task follows this lifecycle:
+1. **Creation**: Task is created from input data via `flb_task_create()`
+2. **Routing**: Output plugin destinations are determined based on configuration
+3. **Processing**: Task is dispatched to output plugins for processing
+4. **Completion**: Task is destroyed when all routes are completed
+5. **Retry**: Failed routes may trigger retry mechanisms
+
+### Task Map System
+
+The task map system provides efficient lookup of tasks by ID, which is crucial for the event-driven architecture where tasks are communicated between engine components. Tasks are assigned unique IDs from a pre-allocated map to ensure fast access.
+
+### Concurrency Management
+
+Tasks use mutex locks to ensure thread-safe access to shared data structures. The `users` counter tracks how many threads or coroutines are actively working with the task, preventing premature destruction.
+
+### Memory Management
+
+The task system carefully manages memory to prevent leaks:
+- Tasks are destroyed when no longer referenced
+- Associated chunks are properly cleaned up
+- Retry contexts are removed when no longer needed
+- Event chunks are destroyed when tasks are completed
 
 ## Usage Examples
 
@@ -94,3 +142,46 @@ static int cb_flush(struct flb_output_instance *ins,
     // Call flb_task_done() when processing completes
 }
 ```
+
+For programmatic usage, tasks can be created directly:
+
+```c
+struct flb_task *task = flb_task_create(ref_id, buf, size, i_ins, ic, tag, config, &err);
+if (task) {
+    // Task created successfully
+    // Process task routes
+    // Clean up with flb_task_destroy() when done
+}
+```
+
+## Error Handling
+
+The task system implements robust error handling:
+- Failed task creation results in appropriate error codes
+- Memory allocation failures are gracefully handled
+- Retry mechanisms handle temporary output failures
+- Deadlock prevention through proper lock ordering
+
+## Performance Considerations
+
+The task system is designed for high performance:
+- Task ID assignment uses pre-allocated maps for O(1) lookup
+- Minimal memory overhead per task
+- Efficient routing determination using bitmask operations
+- Thread-safe operations with fine-grained locking
+
+## Configuration Impact
+
+Task behavior is influenced by several configuration settings:
+- Output plugin retry limits
+- Input plugin buffer settings
+- Routing rules defined in configuration
+- Memory limits that affect task queuing
+
+## Debugging and Monitoring
+
+The task system provides several debugging aids:
+- `flb_task_running_print()` for displaying active tasks
+- Detailed logging of task creation and destruction
+- Retry attempt tracking
+- Route status monitoring
