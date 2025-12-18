@@ -17,8 +17,8 @@ The primary purpose of this file is to:
 ### Mode Creation Factory
 - `flb_ml_mode_create()` - Creates a multiline context based on a named mode with configurable parameters
 
-### Parser Definition Creation
-- `flb_ml_parser_create()` - Creates a new multiline parser definition with specified parameters and configuration options
+### Mode Definition Creation
+- `flb_ml_parser_create()` - Creates a new multiline mode definition with specified parameters and configuration options
 
 ## Supported Built-in Modes
 
@@ -90,7 +90,7 @@ This module depends on:
 The `flb_ml_mode_create()` function acts as a router, directing requests to mode-specific implementation functions based on the requested mode name. This design allows for easy extension with new built-in modes without modifying the routing logic.
 
 ### Parser Configuration
-The `flb_ml_parser_create()` function provides a flexible way to define multiline parsers with various configuration options, supporting different matching strategies and customization points. It handles memory allocation for all string parameters and integrates with the main Fluent Bit configuration system.
+The `flb_ml_parser_create()` function provides a flexible way to define multiline modes with various configuration options, supporting different matching strategies and customization points. It handles memory allocation for all string parameters and integrates with the main Fluent Bit configuration system.
 
 ### Memory Management
 Proper memory allocation and cleanup is handled for all string data and list structures. The implementation uses Fluent Bit's memory management utilities to ensure consistency with the broader codebase.
@@ -126,9 +126,19 @@ The functions return specific error codes:
 struct flb_ml *ml = flb_ml_mode_create(config, "docker", 500, NULL);
 ```
 
-### Creating a Custom Parser Definition
+### Creating a Custom Mode Definition
 ```c
-struct flb_ml_parser *parser = flb_ml_parser_create(config,
+struct flb_ml_mode *parser = flb_ml_parser_create(config,
+    "custom_mode",
+    FLB_ML_ENDSWITH,
+    "\n",
+    FLB_FALSE,
+    1000,
+    "message",
+    "stream",
+    NULL,
+    parser_ctx,
+    NULL);
     "custom_mode",
     FLB_ML_ENDSWITH,
     "\n",
@@ -166,8 +176,8 @@ For optimal performance:
 
 This module integrates with:
 - The main multiline engine (`flb_ml.c`) for context creation
-- Built-in parser implementations (`flb_ml_parser_*.c`) for mode-specific processing
-- The Fluent Bit configuration system for parser registration
+- Built-in mode implementations (`flb_ml_parser_*.c`) for mode-specific processing
+- The Fluent Bit configuration system for mode registration
 - Input plugins for multiline processing integration
 
 ## Testing and Debugging
