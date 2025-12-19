@@ -1,85 +1,63 @@
-# CMakeLists.txt (WAMRC)
+# WAMRC CMakeLists.txt Documentation
 
 ## Overview
 
-This CMakeLists.txt file configures the build system for the WAMRC (WASM Micro Runtime Compiler) component of Fluent Bit. It sets up compilation flags, dependencies, and build targets for compiling WebAssembly modules to native code.
+This CMakeLists.txt file configures the build process for the WAMR (WebAssembly Micro Runtime) compiler component within Fluent Bit. It handles platform-specific configurations, compiler flags, and dependencies required to build the WAMR compiler (wamrc).
 
 ## Key Components
 
-### Build Configuration
-- Sets C++ standard to C++14
-- Configures platform-specific build settings
-- Defines target architecture based on the host system
-- Sets various WAMR (WebAssembly Micro Runtime) feature flags
+### Platform Detection and Configuration
+- Automatically detects the build platform (Windows, macOS, Linux) and sets appropriate compiler definitions
+- Configures target architecture based on system processor (X86_64, ARM, AARCH64, RISCV, etc.)
+- Sets platform-specific build flags and compiler options
 
-### Target Architecture Detection
-Automatically detects and configures the build target:
-- X86_64, AMD_64, X86_32 for Intel/AMD processors
-- AARCH64 for ARM64 processors
-- ARM for ARM processors (including Raspberry Pi variants)
-- RISCV64/RISCV32 for RISC-V processors
-- MIPS, XTENSA for embedded architectures
+### WAMR Feature Configuration
+- Enables various WAMR features through compile-time definitions:
+  - `WASM_ENABLE_INTERP`: Enables interpreter mode
+  - `WASM_ENABLE_WAMR_COMPILER`: Enables WAMR compiler
+  - `WASM_ENABLE_BULK_MEMORY`: Enables bulk memory operations
+  - `WASM_DISABLE_HW_BOUND_CHECK`: Disables hardware boundary checks
+  - `WASM_ENABLE_SHARED_MEMORY`: Enables shared memory support
+  - `WASM_ENABLE_THREAD_MGR`: Enables thread management
+  - `WASM_ENABLE_TAIL_CALL`: Enables tail call optimization
+  - `WASM_ENABLE_SIMD`: Enables SIMD instruction support
+  - `WASM_ENABLE_REF_TYPES`: Enables reference types
+  - `WASM_ENABLE_CUSTOM_NAME_SECTION`: Enables custom name sections
+  - `WASM_ENABLE_AOT_STACK_FRAME`: Enables AOT stack frame support
+  - `WASM_ENABLE_DUMP_CALL_STACK`: Enables call stack dumping
+  - `WASM_ENABLE_PERF_PROFILING`: Enables performance profiling
+  - `WASM_ENABLE_LOAD_CUSTOM_SECTION`: Enables loading custom sections
+  - `WASM_ENABLE_LIB_WASI_THREADS`: Enables WASI threads library
+  - `WASM_ENABLE_MODULE_INST_CONTEXT`: Enables module instance context
+  - `WASM_ENABLE_MEMORY64`: Enables 64-bit memory addressing
+  - `WASM_ENABLE_EXTENDED_CONST_EXPR`: Enables extended constant expressions
 
-### WAMR Features
-Enables various WebAssembly features:
-- WASM_ENABLE_INTERP=1: Enables interpreter mode
-- WASM_ENABLE_WAMR_COMPILER=1: Enables WAMR compiler
-- WASM_ENABLE_BULK_MEMORY=1: Enables bulk memory operations
-- WASM_ENABLE_SHARED_MEMORY=1: Enables shared memory support
-- WASM_ENABLE_THREAD_MGR=1: Enables thread management
-- WASM_ENABLE_TAIL_CALL=1: Enables tail call optimization
-- WASM_ENABLE_SIMD=1: Enables SIMD instruction support
-- WASM_ENABLE_REF_TYPES=1: Enables reference types
+### LLVM Integration
+- Searches for system LLVM installation or uses bundled LLVM
+- Requires LLVM 13.0 or higher
+- Configures LLVM-related compiler and linker flags
+- Links against LLVM libraries for AOT compilation
 
-## Important Variables
-
-### Build Target Configuration
-- WAMR_BUILD_TARGET: Specifies the target architecture
-- WAMR_BUILD_PLATFORM: Platform identifier (Windows, Darwin, Linux, etc.)
-- LLVM_DIR: Path to LLVM installation
-
-### Feature Flags
-- WAMR_BUILD_WITH_SYSTEM_LLVM: Whether to use system LLVM installation
-- WAMR_BUILD_MINI_LOADER: Enables minimal loader mode
-- WAMR_BUILD_INTERP: Enables interpreter mode
-- WAMR_BUILD_FAST_INTERP: Enables fast interpreter mode
-- WAMR_BUILD_AOT: Enables ahead-of-time compilation
-- WAMR_BUILD_JIT: Enables just-in-time compilation
+### Library and Executable Targets
+- Builds static libraries:
+  - `vmlib-wamrc-static`: Core WAMR runtime library
+  - `aotclib-static`: AOT compiler library
+- Creates executable: `flb-wamrc-bin` (renamed to `flb-wamrc`)
 
 ## Dependencies
 
-- LLVM 13.0 or higher for compilation
-- CMake 3.13 or higher
-- C++14 compatible compiler
+- LLVM 13.0+ (for AOT compilation)
 - System libraries (pthread, dl, m)
+- WAMR core components (interpreter, AOT compiler, libraries)
 
-## Implementation Details
+## Notable Implementation Details
 
-### Cross-Platform Support
-- Handles Windows (MSVC, MinGW), macOS (Darwin), and Linux builds
-- Configures platform-specific compiler flags
-- Sets appropriate linker flags for different platforms
-
-### LLVM Integration
-- Automatically detects LLVM installation via CMake
-- Falls back to bundled LLVM if system LLVM is not found
-- Configures LLVM-specific build options
-- Handles LLVM version compatibility checks
-
-### Security Hardening
-- Enables PIE (Position Independent Executable) for better security
-- Uses compiler security flags (-fPIE, -pie)
-- Configures garbage collection of unused sections
+1. **Platform-Specific Handling**: Different configurations for Windows (MSVC), macOS (Homebrew LLVM detection), and Linux
+2. **Architecture Auto-Detection**: Automatically sets build target based on system processor
+3. **Security Hardening**: Uses PIE (Position Independent Executable) flags for security
+4. **Conditional Compilation**: Features can be enabled/disabled based on build requirements
+5. **Cross-Platform Support**: Handles different architectures and operating systems
 
 ## Usage
 
-This CMakeLists.txt is automatically included when building Fluent Bit with WAMRC support. To build:
-
-```bash
-# Standard build with WAMRC
-mkdir build && cd build
-cmake .. -DFLB_WASM_MICRO_RUNTIME=On
-make
-```
-
-The resulting `flb-wamrc` binary can be used to compile WebAssembly modules to native code for improved performance in Fluent Bit's WASM plugin.
+This file is included in the main Fluent Bit CMake build system. When building Fluent Bit with WAMR support, this configuration ensures the WAMR compiler component is properly built and integrated.

@@ -1,96 +1,64 @@
-# CMakeLists.txt (WASM)
+# WASM CMakeLists.txt Documentation
 
 ## Overview
 
-This CMakeLists.txt file configures the build system for the WASM (WebAssembly) runtime component of Fluent Bit. It sets up compilation flags, dependencies, and build targets for integrating WebAssembly support into Fluent Bit.
+This CMakeLists.txt file configures the build process for the WASM (WebAssembly) runtime component within Fluent Bit. It handles platform-specific configurations, compiler flags, and dependencies required to integrate WebAssembly support into Fluent Bit.
 
 ## Key Components
 
-### Build Configuration
-- Sets C standard to C99
-- Configures platform-specific build settings
-- Defines target architecture based on the host system
-- Sets various WAMR (WebAssembly Micro Runtime) feature flags
+### Platform Detection and Configuration
+- Automatically detects the build platform (Windows, macOS, Linux) and sets appropriate compiler definitions
+- Configures target architecture based on system processor (X86_64, ARM, AARCH64, RISCV, MIPS, XTENSA, ARC, etc.)
+- Sets platform-specific build flags and compiler options
 
-### Target Architecture Detection
-Automatically detects and configures the build target:
-- X86_64, AMD_64, X86_32 for Intel/AMD processors
-- AARCH64 for ARM64 processors
-- ARM for ARM processors (including Raspberry Pi variants)
-- RISCV64/RISCV32 for RISC-V processors
-- MIPS, XTENSA for embedded architectures
-- ARC for Synopsys ARC processors
+### WAMR Feature Configuration
+- Enables various WAMR features through compile-time definitions:
+  - `WAMR_BUILD_MINI_LOADER`: Enables minimal loader mode
+  - `WAMR_BUILD_INTERP`: Enables interpreter mode
+  - `WAMR_BUILD_FAST_INTERP`: Enables fast interpreter mode
+  - `WAMR_BUILD_AOT`: Enables ahead-of-time compilation
+  - `WAMR_BUILD_JIT`: Enables just-in-time compilation
+  - `WAMR_BUILD_LIBC_BUILTIN`: Enables built-in libc functions
+  - `WAMR_BUILD_LIBC_WASI`: Enables WASI libc support
+  - `WAMR_BUILD_LIBC_UVWASI`: Enables uvwasi libc support for Windows
+  - `WAMR_BUILD_LIB_PTHREAD`: Enables pthread support
+  - `WAMR_BUILD_REF_TYPES`: Enables reference types
+  - `WASM_BUILD_SHARED_MEMORY`: Enables shared memory support
+  - `WASM_BUILD_THREAD_MGR`: Enables thread management
+  - `WASM_BUILD_TAIL_CALL`: Enables tail call optimization
+  - `WASM_BUILD_REF_TYPES`: Enables reference types
+  - `WASM_BUILD_CUSTOM_NAME_SECTION`: Enables custom name sections
+  - `WASM_BUILD_AOT_STACK_FRAME`: Enables AOT stack frame support
+  - `WASM_BUILD_DUMP_CALL_STACK`: Enables call stack dumping
+  - `WASM_BUILD_PERF_PROFILING`: Enables performance profiling
+  - `WASM_BUILD_LOAD_CUSTOM_SECTION`: Enables loading custom sections
+  - `WASM_BUILD_MODULE_INST_CONTEXT`: Enables module instance context
+  - `WASM_BUILD_MEMORY64`: Enables 64-bit memory addressing
+  - `WASM_BUILD_EXTENDED_CONST_EXPR`: Enables extended constant expressions
+  - `WASM_BUILD_GC`: Enables garbage collection support
+  - `WAMR_DISABLE_HW_BOUND_CHECK`: Disables hardware boundary checking
 
-### WAMR Features
-Enables various WebAssembly features:
-- WAMR_BUILD_INTERP=1: Enables interpreter mode
-- WAMR_BUILD_FAST_INTERP=1: Enables fast interpreter mode
-- WAMR_BUILD_AOT=1: Enables ahead-of-time compilation
-- WAMR_BUILD_LIBC_BUILTIN=1: Enables built-in libc functions
-- WAMR_BUILD_LIBC_WASI=1: Enables WASI libc support
-- WAMR_BUILD_LIB_PTHREAD=1: Enables pthread support
-- WAMR_BUILD_REF_TYPES=1: Enables reference types
-- WASM_BUILD_SHARED_MEMORY=1: Enables shared memory support
-- WASM_BUILD_THREAD_MGR=1: Enables thread management
-- WASM_BUILD_TAIL_CALL=1: Enables tail call optimization
-- WASM_BUILD_REF_TYPES=1: Enables reference types
-- WASM_BUILD_GC=1: Enables garbage collection support
-
-## Important Variables
-
-### Build Target Configuration
-- WAMR_BUILD_TARGET: Specifies the target architecture
-- WAMR_BUILD_PLATFORM: Platform identifier (Windows, Darwin, Linux, etc.)
-
-### Feature Flags
-- WAMR_BUILD_MINI_LOADER: Enables minimal loader mode
-- WAMR_BUILD_JIT: Enables just-in-time compilation
-- WAMR_DISABLE_HW_BOUND_CHECK: Disables hardware boundary checking
-- WAMR_BUILD_SIMD: Enables SIMD instruction support
-
-### Library Configuration
-- WAMR_ROOT_DIR: Root directory of WASM Micro Runtime
-- WAMR_BUILD_LIBC_UVWASI: Enables uvwasi libc support for Windows
+### Library and Executable Targets
+- Builds static libraries:
+  - `vmlib-static`: Core WASM Micro Runtime library
+  - `flb-wasm-static`: Fluent Bit's WASM integration library
 
 ## Dependencies
 
-- CMake 3.13 or higher
-- C99 compatible compiler
+- WASM Micro Runtime (WAMR) core components
 - System libraries (pthread, dl, m)
 - Optional: Jemalloc for memory allocation
 - Optional: Libuv for uvwasi support
 
-## Implementation Details
+## Notable Implementation Details
 
-### Cross-Platform Support
-- Handles Windows (MSVC, MinGW), macOS (Darwin), and Linux builds
-- Configures platform-specific compiler flags
-- Sets appropriate linker flags for different platforms
-
-### Memory Management
-- Integrates with Fluent Bit's memory allocation system
-- Supports both system malloc and Jemalloc
-- Configures heap and stack sizes for WASM instances
-
-### Security Hardening
-- Enables PIE (Position Independent Executable) for better security
-- Uses compiler security flags (-fPIE, -pie)
-- Configures garbage collection of unused sections
-
-### Library Linking
-- Links with WASM Micro Runtime static library (vmlib-static)
-- Links with Fluent Bit's WASM support library (flb-wasm-static)
-- Conditional linking based on platform and features
+1. **Platform-Specific Handling**: Different configurations for Windows (MSVC, MinGW), macOS (Darwin), and Linux
+2. **Architecture Auto-Detection**: Automatically sets build target based on system processor
+3. **Security Hardening**: Uses PIE (Position Independent Executable) flags for security
+4. **Conditional Compilation**: Features can be enabled/disabled based on build requirements
+5. **Memory Management Integration**: Integrates with Fluent Bit's memory allocation system
+6. **Cross-Platform Support**: Handles different architectures and operating systems
 
 ## Usage
 
-This CMakeLists.txt is automatically included when building Fluent Bit with WASM support. To build:
-
-```bash
-# Standard build with WASM support
-mkdir build && cd build
-cmake .. -DFLB_WASM=On
-make
-```
-
-The resulting Fluent Bit binary will include WASM runtime support, allowing plugins to be written in WebAssembly for improved portability and security.
+This file is included in the main Fluent Bit CMake build system. When building Fluent Bit with WASM support, this configuration ensures the WASM runtime component is properly built and integrated.

@@ -1,4 +1,4 @@
-# winsvc.c
+# winsvc.c Documentation
 
 ## Overview
 
@@ -14,14 +14,14 @@ This file implements Windows Service functionality for Fluent Bit on Windows pla
 ### Core Functions
 
 #### Service Lifecycle Functions
-- `win32_main()`: Main entry point that determines if Fluent Bit should run as a service or console application
-- `svc_main()`: Service main function called by Windows Service Control Manager
-- `svc_handler()`: Handles service control requests (e.g., STOP)
-- `win32_started()`: Notifies Service Control Manager that the service has started
+- `win32_main()`: Main entry point that determines if Fluent Bit should run as a service or console application based on SCM connection
+- `svc_main()`: Service main function called by Windows Service Control Manager to initialize and start the service
+- `svc_handler()`: Handles service control requests (e.g., STOP) and triggers graceful shutdown
+- `win32_started()`: Notifies Service Control Manager that the service has started and is running
 
 #### Utility Functions
-- `update_default_workdir()`: Sets the working directory to where fluent-bit.exe is located
-- `svc_notify()`: Updates service status with Service Control Manager
+- `update_default_workdir()`: Sets the working directory to where fluent-bit.exe is located, avoiding the default System32 directory
+- `svc_notify()`: Updates service status with Service Control Manager with proper state transitions
 
 ## Important Variables
 
@@ -31,36 +31,27 @@ This file implements Windows Service functionality for Fluent Bit on Windows pla
 - `svc_name`: Name of the Windows service ("fluent-bit")
 
 ### Service Table
-- `svc_table`: Array defining service entry points for Service Control Manager
+- `svc_table`: Array defining service entry points for Service Control Manager registration
 
 ## Dependencies
 
 ### Windows API
-- Windows.h: Core Windows API functions
-- Shlwapi.h: Path manipulation functions
+- Windows.h: Core Windows API functions for service management
+- Shlwapi.h: Path manipulation functions (PathRemoveFileSpecA)
 
 ### Fluent Bit Core
 - `config`: Global Fluent Bit configuration structure
 - `flb_engine_exit()`: Function to gracefully shut down Fluent Bit engine
-- `flb_main()`: Main Fluent Bit entry point
+- `flb_main()`: Main Fluent Bit entry point for actual processing
 
-## Implementation Details
+## Notable Implementation Details
 
-### Service Installation and Management
-- Automatic detection of service vs. console mode
-- Graceful shutdown handling through service control handler
-- Proper status reporting to Service Control Manager
-- Working directory management for service context
-
-### Error Handling
-- Comprehensive error checking for Windows API calls
-- Proper cleanup on failure conditions
-- Logging through Windows event system (implicit)
-
-### Path Management
-- Automatic working directory update to executable location
-- Proper handling of relative paths in service context
-- Unicode path support through Windows API
+1. **Dual Mode Operation**: Automatically detects whether to run as a service or console application based on SCM connection
+2. **Working Directory Management**: Updates the working directory to the executable location instead of System32
+3. **Proper Status Reporting**: Implements correct service state transitions with appropriate control acceptance
+4. **Graceful Shutdown**: Handles service stop requests by calling flb_engine_exit() for clean termination
+5. **Error Handling**: Comprehensive error checking with proper cleanup on failure conditions
+6. **Security Considerations**: Avoids accepting control during SERVICE_START_PENDING state to prevent crashes
 
 ## Usage
 
